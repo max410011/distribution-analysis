@@ -80,9 +80,11 @@ def quantize(
     print("==========================================\n\n")
 
     # Optionally save the compressed model
-    # save_dir = model_id.rstrip("/").split("/")[-1] + f"-test-{scheme}-{method}-W8A8-Dynamic-Per-Token"
-    # model.save_pretrained(save_dir, save_compressed=True)
-    # tokenizer.save_pretrained(save_dir)
+    print("========== SAVING COMPRESSED MODEL ==============")
+    save_dir = model_id.rstrip("/").split("/")[-1] + f"-test-{scheme}-{method}-W8A8-Dynamic-Per-Token"
+    model.save_pretrained(save_dir, save_compressed=True)
+    tokenizer.save_pretrained(save_dir)
+    print(f"Compressed model saved to {save_dir}")
 
 
 def main():
