@@ -1,0 +1,7 @@
+[submodule "external/llm-compressor"]
+	path = external/llm-compressor
+	url = https://github.com/max410011/llm-compressor.git
+[submodule "external/compressed-tensors"]
+	path = external/compressed-tensors
+	url = git@github.com:max410011/compressed-tensors.git
+	branch = dev/mlin
