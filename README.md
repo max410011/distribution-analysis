@@ -1,5 +1,11 @@
 # distribution-analysis
 
+## Clone the repo
+```bash
+git clone --recursive https://github.com/max410011/distribution-analysis.git
+```
+You will see the `main.py` and 2 submodule (llm-compressor and compressed-tensors)
+
 ## Install
 ```bash
 python -m venv .venv
@@ -10,7 +16,9 @@ pip install -e compressed-tensors
 ```
 ## Quantize the model
 ```bash
-python tinyllama_example.py
+## Quantize the model
+```bash
+python main.py --model_id TinyLlama/TinyLlama-1.1B-Chat-v1.0 --scheme SYM --method Smooth-GPTQ
 ```
 - `--model_id`  
   Specify the HuggingFace model ID (default: TinyLlama/TinyLlama-1.1B-Chat-v1.0).
