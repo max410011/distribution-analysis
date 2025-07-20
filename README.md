@@ -1,41 +1,33 @@
 # distribution-analysis
 
-
-## Install UV
+## Install Python Virtual Environment
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# or, if you prefer pip
-pip install uv
-```
-
-## Install
-```bash
-uv venv
+pip3 install --upgrade pip
+python3 -m venv .venv
 source .venv/bin/activate
-uv sync
-uv pip install -e llm-compressor
-uv pip install -e compressed-tensors
+pip3 install -e .
+pip3 install -e llm-compressor
+pip3 install -e compressed-tensors
 ```
-
 ## Quantize the model
 ```bash
-uv run tinyllama_example.py
+python3 tinyllama_example.py
 ```
-- `--model_id`  
+`--model_id`  
   Specify the HuggingFace model ID (default: TinyLlama/TinyLlama-1.1B-Chat-v1.0).
 
-- `--scheme`  
+`--scheme`  
   Quantization scheme:  
   `SYM` = symmetric quantization (default)  
   `ASYM` = asymmetric quantization
 
-- `--method`  
+`--method`  
   Quantization method:  
   `RTN` = Round-To-Nearest (default)  
   `Smooth-GPTQ` = SmoothQuant + GPTQ
 
-- `--num_calibration_samples`  
+`--num_calibration_samples`  
   Number of calibration samples (default: 512).
 
-- `--max_sequence_length`  
+`--max_sequence_length`  
   Maximum sequence length for calibration (default: 2048).
