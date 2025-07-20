@@ -1,3 +1,4 @@
+import argparse
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -6,83 +7,101 @@ from llmcompressor.modifiers.quantization import GPTQModifier, QuantizationModif
 from llmcompressor.modifiers.smoothquant import SmoothQuantModifier
 from llmcompressor.utils import dispatch_for_generation
 
-# Step 1: Select model and load it.
-MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-# MODEL_ID = "meta-llama/meta-llama-3.1-8b-instruct"
-model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype="auto")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
-# Step 2: # Select calibration dataset.
-DATASET_ID = "HuggingFaceH4/ultrachat_200k"
-DATASET_SPLIT = "train_sft"
+def quantize(
+    model_id: str,
+    scheme: str = "SYM",
+    method: str = "RTN",
+    num_calibration_samples: int = 512,
+    max_sequence_length: int = 2048,
+):
+    # Load model and tokenizer
+    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto")
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-# Select number of samples. 512 samples is a good place to start.
-# Increasing the number of samples can improve accuracy.
-NUM_CALIBRATION_SAMPLES = 512
-MAX_SEQUENCE_LENGTH = 2048
+    # Load and preprocess dataset
+    DATASET_ID = "HuggingFaceH4/ultrachat_200k"
+    DATASET_SPLIT = "train_sft"
+    ds = load_dataset(DATASET_ID, split=f"{DATASET_SPLIT}[:{num_calibration_samples}]")
+    ds = ds.shuffle(seed=42)
 
-# Load dataset and preprocess.
-ds = load_dataset(DATASET_ID, split=f"{DATASET_SPLIT}[:{NUM_CALIBRATION_SAMPLES}]")
-ds = ds.shuffle(seed=42)
+    def preprocess(example):
+        return {
+            "text": tokenizer.apply_chat_template(
+                example["messages"],
+                tokenize=False,
+            )
+        }
 
+    ds = ds.map(preprocess)
 
-def preprocess(example):
-    return {
-        "text": tokenizer.apply_chat_template(
-            example["messages"],
-            tokenize=False,
+    def tokenize_fn(sample):
+        return tokenizer(
+            sample["text"],
+            padding=False,
+            max_length=max_sequence_length,
+            truncation=True,
+            add_special_tokens=False,
         )
-    }
 
-ds = ds.map(preprocess)
+    ds = ds.map(tokenize_fn, remove_columns=ds.column_names)
 
-# Tokenize inputs.
-def tokenize(sample):
-    return tokenizer(
-        sample["text"],
-        padding=False,
-        max_length=MAX_SEQUENCE_LENGTH,
-        truncation=True,
-        add_special_tokens=False,
+    # Choose quantization scheme
+    quant_scheme = "W8A8" if scheme == "SYM" else "W8A8_ASYM"
+
+    # Choose quantization method and build recipe
+    if method == "RTN":
+        recipe = [
+            QuantizationModifier(targets="Linear", scheme=quant_scheme, ignore=["lm_head"]),
+        ]
+    elif method == "GPTQ+Smooth":
+        recipe = [
+            SmoothQuantModifier(smoothing_strength=0.8),
+            GPTQModifier(targets="Linear", scheme=quant_scheme, ignore=["lm_head"]),
+        ]
+    else:
+        raise ValueError("Unknown quantization method.")
+
+    # Apply quantization
+    oneshot(
+        model=model,
+        dataset=ds,
+        recipe=recipe,
+        max_seq_length=max_sequence_length,
+        num_calibration_samples=num_calibration_samples,
+    )
+
+    # Confirm generations of the quantized model look sane.
+    print("========== SAMPLE GENERATION ==============")
+    dispatch_for_generation(model)
+    input_ids = tokenizer("Hello my name is", return_tensors="pt").input_ids.to("cuda")
+    output = model.generate(input_ids, max_new_tokens=100)
+    print(tokenizer.decode(output[0]))
+    print("==========================================\n\n")
+
+    # Optionally save the compressed model
+    # save_dir = model_id.rstrip("/").split("/")[-1] + f"-test-{scheme}-{method}-W8A8-Dynamic-Per-Token"
+    # model.save_pretrained(save_dir, save_compressed=True)
+    # tokenizer.save_pretrained(save_dir)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LLM Compressor Quantization Example")
+    parser.add_argument("--model_id", type=str, default="TinyLlama/TinyLlama-1.1B-Chat-v1.0", help="Model ID to use")
+    parser.add_argument("--scheme", type=str, choices=["SYM", "ASYM"], default="SYM", help="Quantization scheme: SYM or ASYM")
+    parser.add_argument("--method", type=str, choices=["RTN", "Smooth-GPTQ"], default="RTN", help="Quantization method: RTN or SmoothQuant + GPTQ")
+    parser.add_argument("--num_calibration_samples", type=int, default=512, help="Number of calibration samples")
+    parser.add_argument("--max_sequence_length", type=int, default=2048, help="Max sequence length")
+    args = parser.parse_args()
+
+    quantize(
+        model_id=args.model_id,
+        scheme=args.scheme,
+        method=args.method,
+        num_calibration_samples=args.num_calibration_samples,
+        max_sequence_length=args.max_sequence_length,
     )
 
 
-ds = ds.map(tokenize, remove_columns=ds.column_names)
-
-# Step 3: Apply Quantization
-
-# Configure algorithms. In this case, we:
-#   * apply SmoothQuant to make the activations easier to quantize
-#   * quantize the weights to int8 with GPTQ (static per channel)
-#   * quantize the activations to int8 (dynamic per token)
-recipe = [
-    # SmoothQuantModifier(smoothing_strength=0.8),
-    # GPTQModifier(targets="Linear", scheme="W8A8", ignore=["lm_head"]),
-    # GPTQModifier(targets="Linear", scheme="W8A8_ASYM", ignore=["lm_head"]),
-    QuantizationModifier(targets="Linear", scheme="W8A8", ignore=["lm_head"]),
-    # QuantizationModifier(targets="Linear", scheme="W8A8_ASYM", ignore=["lm_head"]),
-]
-
-# Apply algorithms and save to output_dir
-oneshot(
-    model=model,
-    dataset=ds,
-    recipe=recipe,
-    max_seq_length=MAX_SEQUENCE_LENGTH,
-    num_calibration_samples=NUM_CALIBRATION_SAMPLES,
-)
-
-# Confirm generations of the quantized model look sane.
-print("========== SAMPLE GENERATION ==============")
-dispatch_for_generation(model)
-input_ids = tokenizer("Hello my name is", return_tensors="pt").input_ids.to("cuda")
-output = model.generate(input_ids, max_new_tokens=100)
-print(tokenizer.decode(output[0]))
-print("==========================================\n\n")
-
-# Save to disk compressed.
-# SAVE_DIR = MODEL_ID.rstrip("/").split("/")[-1] + "test-SYM-W8A8-Dynamic-Per-Token"
-# # SAVE_DIR = MODEL_ID.rstrip("/").split("/")[-1] + "-Smooth-GPTQ-ASYM-W8A8-Dynamic-Per-Token"
-# model.save_pretrained(SAVE_DIR, save_compressed=True)
-# tokenizer.save_pretrained(SAVE_DIR)
-
+if __name__ == "__main__":
+    main()
