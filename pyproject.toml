@@ -1,12 +1,10 @@
 [project]
-name = "git@github.com:max410011/distribution-analysis.git"
+name = "distribution-analysis"
 version = "0.1.0"
 description = "Find quanaitzed model input/weight distribution."
 readme = "README.md"
-requires-python = "==3.11"
+requires-python = ">=3.11"
 dependencies = [
     "datasets==4.0.0",
     "transformers==4.52.0",
-    "llm-compressor @ git+https://github.com/max410011/llm-compressor.git",
-    "compressed-tensors @ git+ssh://git@github.com/max410011/compressed-tensors.git@dev/mlin",
 ]
