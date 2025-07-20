@@ -13,6 +13,8 @@ pip install uv
 uv venv
 source .venv/bin/activate
 uv sync
+uv pip install -e llm-compressor
+uv pip install -e compressed-tensors
 ```
 
 ## Quantize the model
