@@ -29,14 +29,19 @@ Arguments:
 - `--model_id`  
   HuggingFace model ID (default: TinyLlama/TinyLlama-1.1B-Chat-v1.0)
 
+- `--format`  
+  Quantization format:  
+  `INT8` = INT8 (default)  
+  `FP8` = FP8
+
 - `--scheme`  
-  Quantization scheme:  
+  Quantization scheme (for INT8 format):  
   `SYM` = symmetric quantization (default)  
   `ASYM` = asymmetric quantization
 
 - `--method`  
   Quantization method:  
-  `RTN` = Round-To-Nearest
+  `RTN` = Round-To-Nearest  
   `Smooth-GPTQ` = SmoothQuant + GPTQ (default)  
 
 - `--num_calibration_samples`  

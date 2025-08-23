@@ -12,6 +12,7 @@ def quantize(
     model_id: str,
     scheme: str = "SYM",
     method: str = "RTN",
+    format: str = "INT8",
     num_calibration_samples: int = 512,
     max_sequence_length: int = 2048,
 ):
@@ -47,7 +48,10 @@ def quantize(
     ds = ds.map(tokenize_fn, remove_columns=ds.column_names)
 
     # Choose quantization scheme
-    quant_scheme = "W8A8" if scheme == "SYM" else "W8A8_ASYM"
+    if format == "INT8":
+        quant_scheme = "W8A8" if scheme == "SYM" else "W8A8_ASYM"
+    else:
+        quant_scheme = "FP8_DYNAMIC"
 
     # Choose quantization method and build recipe
     if method == "RTN":
@@ -81,7 +85,7 @@ def quantize(
 
     # Save the compressed model
     print("========== SAVING COMPRESSED MODEL ==============")
-    save_dir = model_id.rstrip("/").split("/")[-1] + f"-test-{scheme}-{method}-W8A8-Dynamic-Per-Token"
+    save_dir = model_id.rstrip("/").split("/")[-1] + f"-{method}-{quant_scheme}-Per-Token"
     model.save_pretrained(save_dir, save_compressed=True)
     tokenizer.save_pretrained(save_dir)
     print(f"Compressed model saved to {save_dir}")
@@ -90,6 +94,7 @@ def quantize(
 def main():
     parser = argparse.ArgumentParser(description="LLM Compressor Quantization Example")
     parser.add_argument("--model_id", type=str, default="TinyLlama/TinyLlama-1.1B-Chat-v1.0", help="Model ID to use")
+    parser.add_argument("--format", type=str, choices=["INT8", "FP8"], default="INT8", help="Quantization format: INT8 or FP8")
     parser.add_argument("--scheme", type=str, choices=["SYM", "ASYM"], default="SYM", help="Quantization scheme: SYM or ASYM")
     parser.add_argument("--method", type=str, choices=["RTN", "Smooth-GPTQ"], default="Smooth-GPTQ", help="Quantization method: RTN or SmoothQuant + GPTQ")
     parser.add_argument("--num_calibration_samples", type=int, default=512, help="Number of calibration samples")
@@ -100,6 +105,7 @@ def main():
         model_id=args.model_id,
         scheme=args.scheme,
         method=args.method,
+        format=args.format,
         num_calibration_samples=args.num_calibration_samples,
         max_sequence_length=args.max_sequence_length,
     )
